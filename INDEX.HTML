@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#1c1c1c" />
+<meta name="description" content="Быстрый расчёт беговых пульсовых зон от ПАНО. Минимализм, дарк-тема, глассморфизм.">
+<meta name="color-scheme" content="dark light">
+<title>Зоны от АНП — compact hearts (Dark · Glassmorphism)</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --bg:#1c1c1c; --ink:#e9edf4; --muted:#a0a4ae; --panel:#2a2a2a;
+    --accent:#EF233C;
+    --shadow-dark:#121212; --shadow-light:#333333; --radius:20px;
+
+    /* Glassmorphism tokens */
+    --glass-bg: rgba(255,255,255,.07);
+    --glass-border: rgba(255,255,255,.22);
+    --glass-highlight: rgba(255,255,255,.35);
+    --glass-shadow: rgba(0,0,0,.45);
+    --glass-blur: 18px;
+    --glass-glow: 0 10px 30px rgba(239,35,60,.25);
+
+    /* Доп. токены для нового подсвета */
+    --pulse-ring: rgba(255,255,255,.45);
+    --pulse-glow: rgba(255,255,255,.14);
+  }
+
+  *{box-sizing:border-box}
+  html,body{height:100%; overflow-x:hidden;}
+  body{
+    margin:0; color:var(--ink); font-family:'Bebas Neue',system-ui,-apple-system,Roboto,Arial;
+    background: var(--bg);
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  }
+
+  .viewport{min-height:100svh; padding:clamp(4px,2vh,12px); display:flex; align-items:center; justify-content:center;}
+  .shell{width:min(460px,100%);} 
+
+  .card{
+    background:var(--panel); border-radius:24px; padding:12px;
+    box-shadow:6px 6px 12px var(--shadow-dark), -6px -6px 12px var(--shadow-light);
+    overflow:visible; /* для модалки */
+  }
+
+  /* РАДАР */
+  .radar{
+    position:relative; height:110px; margin:4px 0 10px; border-radius:20px; overflow:hidden;
+    background:var(--panel);
+    box-shadow:none;
+    border:none;
+    outline:none;
+  }
+
+  /* Кружок с сердцем — по центру контейнера (поверх линии) */
+  .heart{
+    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    width:56px; height:56px; border-radius:50%; display:grid; place-items:center; color:#fff;
+    background:radial-gradient(circle at 30% 30%, #ff5a6f, var(--accent));
+    box-shadow:0 8px 14px rgba(239,35,60,.35), inset 0 1px 0 rgba(255,255,255,.25);
+    z-index:3; /* выше линии */
+  }
+  .heart:before{content:"❤"; font-size:22px;}
+
+  /* Линия пульса — центр, под кружком */
+  .ecg-wrap{
+    position:absolute; left:12px; right:12px;
+    top:50%; transform: translateY(-50%);
+    height:48px;
+    background: transparent;
+    box-shadow: none;
+    border: none;
+    outline: none;
+    z-index:2; /* ниже кружка — линия спрятана под сердцем */
+  }
+  svg.ecg{width:100%; height:100%; border:none; outline:none;}
+  .trace{fill:none; stroke:var(--accent); stroke-width:2.2; stroke-dasharray:560 560; stroke-dashoffset:560; animation:draw 3.2s linear infinite;}
+  @keyframes draw{from{stroke-dashoffset:560;} to{stroke-dashoffset:0;}}
+
+  /* ФОРМА */
+  .form{display:flex; flex-direction:column; align-items:center; gap:6px; margin:0 0 10px;}
+  .form .hint{font-size:13px; color:var(--muted);} 
+  label{ color:var(--muted); font-size:15px;}
+  .input{
+    height:46px; width:100%; max-width:280px; text-align:center;
+    border-radius:14px; outline:none; padding:0 12px; font-size:22px; font-family:'Bebas Neue',sans-serif; color:var(--ink);
+    border:0; background:var(--panel);
+    box-shadow: inset 6px 6px 12px var(--shadow-dark), inset -6px -6px 12px var(--shadow-light);
+  }
+
+  /* Красные кнопки (верхняя и нижняя одинаковые, по центру) */
+  .btn-red{
+    background:linear-gradient(180deg,#ff5a6f,var(--accent));
+    border:none; color:#fff; text-align:center; padding:12px; border-radius:18px;
+    display:flex; justify-content:center; align-items:center;
+    box-shadow:0 0 12px rgba(239,35,60,.4);
+    transition:transform .1s ease; cursor:pointer; width:100%; max-width:380px;
+    font-size:16px; font-family:'Bebas Neue',sans-serif;
+    margin:6px auto 0; /* центрирование */
+  }
+  .pressed{transform:scale(.97);} 
+
+  /* ПЛИТКИ ЗОН */
+  .tiles{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:6px; margin-bottom:10px; width:100%;}
+  @media (max-width:360px){ .tiles{ grid-template-columns:minmax(0,1fr); } }
+
+  .tile{
+    background:var(--panel);
+    border-radius:16px;
+    padding:10px; text-align:center;
+    display:flex; flex-direction:column; align-items:center; gap:4px;
+    box-shadow:inset 2px 2px 6px var(--shadow-dark), inset -2px -2px 6px var(--shadow-light);
+    cursor:pointer;
+    position: relative; /* для подсветки */
+    outline: none; /* под фокус-обводку ниже */
+    transition: transform .18s ease, box-shadow .18s ease;
+  }
+
+  /* Удалено: красная полупрозрачная подсветка активной карточки
+     .tile::after{ background:var(--accent); opacity:0; }
+     .tile.pulse::after{ opacity:.2; }
+  */
+
+  .zone-row{display:flex; align-items:center; justify-content:center; gap:4px;}
+  .zone-title{font-size:14px; color:var(--ink);} 
+  .hearts{display:flex; gap:2px;}
+  .hearts span{ font-size:9px; line-height:1; color:#666; }
+  .hearts span.active{color:var(--accent);} 
+  .zone-desc{font-size:13px; color:var(--muted);} 
+  .num{font-size:20px; font-family:'Bebas Neue',sans-serif;}
+
+  /* ===========================
+     НОВОЕ ДЕЛИКАТНОЕ ВЫДЕЛЕНИЕ АКТИВНОЙ КАРТОЧКИ (glass)
+     =========================== */
+
+  .tile.pulse{
+    transform: translateY(-1px);
+    box-shadow:
+      inset 2px 2px 6px var(--shadow-dark),
+      inset -2px -2px 6px var(--shadow-light),
+      0 10px 26px var(--glass-shadow);
+  }
+
+  /* Тонкая светящаяся рамка */
+  .tile.pulse::before{
+    content:"";
+    position:absolute; inset:-2px; border-radius:inherit;
+    padding:2px; pointer-events:none;
+
+    background:
+      linear-gradient(135deg, var(--glass-highlight), transparent 55%) border-box,
+      linear-gradient(135deg, var(--pulse-ring), transparent 60%) border-box;
+
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+
+    filter: blur(.3px);
+    opacity:.85;
+    animation: ringPulse 1.6s ease-in-out infinite;
+  }
+
+  /* Лёгкий внутренний блик */
+  .tile.pulse::after{
+    content:"";
+    position:absolute; inset:2px; border-radius:inherit; pointer-events:none;
+    background: radial-gradient(120% 90% at 20% 0%, rgba(255,255,255,.20), rgba(255,255,255,0) 55%);
+    opacity:.55;
+    animation: sheen 2.4s ease-in-out infinite;
+  }
+
+  @keyframes ringPulse{
+    0%,100%{ opacity:.55; filter: blur(.2px); }
+    50%    { opacity:.95; filter: blur(.6px); }
+  }
+  @keyframes sheen{
+    0%,100%{ opacity:.35; transform: translateY(0); }
+    50%    { opacity:.6;  transform: translateY(-1px); }
+  }
+
+  /* ===========================
+     ГЛАССМОРФНЫЕ ВСПЛЫВАЮЩИЕ ОКНА
+     =========================== */
+
+  .backdrop{
+    position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+    padding:18px; z-index:9999; opacity:0; transition:opacity .18s ease;
+    background: radial-gradient(60% 60% at 50% 50%, rgba(0,0,0,.55), rgba(0,0,0,.65) 60%, rgba(0,0,0,.72));
+    backdrop-filter: blur(8px) saturate(110%);
+    -webkit-backdrop-filter: blur(8px) saturate(110%);
+  }
+  .backdrop.show{display:flex; opacity:1;}
+
+  .modal{
+    width:min(360px,100%);
+    position:relative;
+    border-radius:20px;
+    padding:14px 16px;
+    text-align:left;
+
+    background: linear-gradient(140deg, rgba(255,255,255,.12), rgba(255,255,255,.04)) border-box;
+    border: 1px solid var(--glass-border);
+    box-shadow:
+      0 1px 0 rgba(255,255,255,.08) inset,
+      0 0 0 1px rgba(255,255,255,.04) inset,
+      0 20px 40px var(--glass-shadow),
+      var(--glass-glow);
+
+    backdrop-filter: blur(var(--glass-blur)) saturate(120%) contrast(105%);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(120%) contrast(105%);
+
+    transform: translateY(6px) scale(.98);
+    opacity: 0;
+    animation: modalIn .24s ease forwards;
+  }
+
+  .modal::before{
+    content:"";
+    position:absolute; inset:0;
+    border-radius:inherit;
+    background:
+      linear-gradient( to bottom right,
+        rgba(255,255,255,.25) 0%,
+        rgba(255,255,255,.08) 30%,
+        rgba(255,255,255,0) 60% );
+    mix-blend-mode: overlay;
+    pointer-events:none;
+    opacity:.5;
+    mask: radial-gradient(120% 100% at 0% 0%, #000 40%, transparent 60%);
+  }
+
+  .modal::after{
+    content:"";
+    position:absolute; inset:0; border-radius:inherit;
+    padding:1px; pointer-events:none;
+    background: linear-gradient(135deg, rgba(239,35,60,.35), rgba(239,35,60,0) 40%, rgba(255,255,255,.25) 70%);
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+  }
+
+  .modal .grain{
+    position:absolute; inset:0; border-radius:inherit; pointer-events:none; opacity:.08;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 160px 160px;
+    mix-blend-mode: soft-light;
+  }
+
+  @keyframes modalIn{
+    to{ opacity:1; transform: translateY(0) scale(1); }
+  }
+
+  .modal header{
+    display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:6px;
+    padding-bottom:6px;
+    border-bottom: 1px solid rgba(255,255,255,.12);
+  }
+
+  .modal h3{
+    font-size:18px; margin:2px 0; color:var(--ink);
+    text-shadow: 0 1px 0 rgba(0,0,0,.25);
+  }
+
+  .modal .content{color:var(--muted); font-size:14px; line-height:1.4; max-height:50vh; overflow:auto;}
+  .close{
+    appearance:none; border:0; background:transparent; font-size:22px; cursor:pointer; color:var(--ink);
+    width:32px; height:32px; display:grid; place-items:center; border-radius:10px;
+    transition: transform .12s ease, background-color .12s ease, opacity .12s ease;
+    opacity:.9;
+  }
+  .close:hover{ background: rgba(255,255,255,.06); }
+  .close:active{ transform: scale(.95); }
+
+  @supports not ((backdrop-filter: blur(10px)) or (-webkit-backdrop-filter: blur(10px))){
+    .backdrop{ background: rgba(0,0,0,.7); }
+    .modal{ background: rgba(34,34,34,.96); }
+    .modal::before,.modal::after,.modal .grain{ display:none; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .trace{ animation: none; }
+    .tile.pulse::before,
+    .tile.pulse::after{ animation:none; }
+    .tile.pulse{ transform:none; }
+    .backdrop{ transition: none; }
+    .modal{ animation: none; opacity:1; transform:none; }
+  }
+
+  /* Видимые фокусы для клавиатуры */
+  .btn-red:focus-visible,
+  .close:focus-visible,
+  .tile:focus-visible,
+  .input:focus-visible{
+    outline: 2px solid var(--glass-highlight);
+    outline-offset: 2px;
+    border-radius: 14px;
+  }
+
+  #helpTile{ white-space:nowrap; }
+</style>
+</head>
+<body>
+  <div class="viewport">
+    <div class="shell">
+      <div class="card">
+        <div class="radar">
+          <div class="heart"></div>
+          <div class="ecg-wrap">
+            <svg class="ecg" viewBox="0 0 600 100" preserveAspectRatio="none" aria-hidden="true">
+              <!-- Базовая линия по центру контейнера -->
+              <path class="trace" d="M0 50
+                C20 48,35 52,55 50
+                L80 50 90 40 100 60 110 30 120 65 130 50
+                C160 48,190 52,220 50
+                L240 50 250 40 260 60 270 35 280 65 290 50
+                C320 48,350 52,380 50
+                L400 50 410 40 420 60 430 32 440 66 450 50
+                C480 48,520 52,560 50
+                L600 50"/>
+            </svg>
+          </div>
+        </div>
+
+        <div class="form">
+          <div style="text-align:center">
+            <label for="anp">МОЙ АНАЭРОБНЫЙ ПОРОГ</label>
+            <div class="hint">уд/мин</div>
+          </div>
+          <input id="anp" class="input" type="number" min="60" max="220" value="165" inputmode="numeric" pattern="[0-9]*" />
+          <button class="btn-red" id="doCalc" type="button">Рассчитать мои зоны пульса</button>
+        </div>
+
+        <div class="tiles" id="zonesGrid" aria-live="polite"></div>
+
+        <button class="btn-red" id="helpTile" type="button">Как узнать свой анаэробный порог - ПАНО</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="backdrop" id="modal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" aria-describedby="modalContent">
+      <span class="grain" aria-hidden="true"></span>
+      <header>
+        <h3 id="modalTitle">Подсказка</h3>
+        <button class="close" id="modalClose" aria-label="Закрыть">×</button>
+      </header>
+      <div class="content" id="modalContent">
+        <p>Беги 1 час максимально равномерно. Средний пульс за 60 минут — твой АНП.</p>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const $ = s => document.querySelector(s);
+  let pulseIndex = 0;
+  let lastValidANP = 165;
+  let lastFocused = null;
+
+  const r = n => Math.round(n);
+
+  // Делает «неперекрывающиеся» целочисленные диапазоны: верхняя граница предыдущей зоны < нижней следующей
+  function toRange(lo, hi){
+    let a = r(lo);
+    let b = r(hi) - 1; // полуинтервал [a; b], чтобы не было совпадения на границе
+    if (b < a) b = a; // защита от схлопывания при маленьких окнах
+    const ndash = '–';
+    const nbsp = '\u00A0';
+    return `${a}${nbsp}${ndash}${nbsp}${b}`;
+  }
+
+  function calcZones(anp){
+    const z1_hi = anp*0.80;
+    const z2_lo = anp*0.80, z2_hi = anp*0.90;
+    const z3_lo = anp*0.90, z3_hi = anp*0.95;
+    const z4_lo = anp*0.95, z4_hi = anp*1.02; // ≈ 95–101% включительно по целым
+    const z5_lo = anp*1.02, z5_hi = anp*1.06; // 102–106%
+    const z6_lo = anp*1.06;
+
+    return [
+      {name:'ЗОНА 1',desc:'Восстановление',        val:`< ${r(z1_hi)}`},
+      {name:'ЗОНА 2',desc:'Аэробная выносливость', val:toRange(z2_lo,z2_hi)},
+      {name:'ЗОНА 3',desc:'Аэробная мощность',     val:toRange(z3_lo,z3_hi)},
+      {name:'ЗОНА 4',desc:'Порог (ПАНО)',          val:toRange(z4_lo,z4_hi)},
+      {name:'ЗОНА 5',desc:'Анаэробная выносливость', val:toRange(z5_lo,z5_hi)},
+      {name:'ЗОНА 6',desc:'Анаэробная мощность',   val:`> ${r(z6_lo)}`}
+    ];
+  }
+
+  function zoneInfo(i){
+    const infos = [
+      {
+        title: 'ЗОНА 1 — Восстановление',
+        html: `
+          <p>&lt;80% ПАНО</p>
+          <p>Суть: очень лёгкая, максимально комфортная нагрузка.</p>
+          <p>Для чего: восстановление, расслабление.</p>
+          <p>Примеры тренировок:</p>
+          <ul>
+            <li>лёгкий бег трусцой после тяжёлых сессий</li>
+            <li>пешие прогулки</li>
+            <li>заминка</li>
+          </ul>
+        `
+      },
+      {
+        title:'ЗОНА 2 — Аэробная база',
+        html:`
+          <p>80–90% ПАНО</p>
+          <p>Суть: лёгкая, «разговорная» нагрузка, база.</p>
+          <p>Для чего: развитие сердечно-сосудистой системы, улучшение выносливости.</p>
+          <p>Примеры тренировок:</p>
+          <ul>
+            <li>длительные пробежки (long run)</li>
+            <li>лёгкие кроссы</li>
+            <li>бег в медленном равномерном темпе</li>
+          </ul>
+          <p>Типичная ошибка: бежать слишком быстро — скатываться в зону 3.</p>
+        `
+      },
+      {
+        title:'ЗОНА 3 — Аэробная мощность',
+        html:`
+          <p>90–95% ПАНО</p>
+          <p>Суть: «комфортно тяжело», дыхание учащается.</p>
+          <p>Для чего: улучшение формы, подготовка к марафонскому темпу.</p>
+          <p>Примеры тренировок:</p>
+          <ul>
+            <li>темповые пробежки (30–60 мин)</li>
+            <li>прогрессивный бег (с выходом в зону 3 в конце)</li>
+            <li>длинные интервалы (например, 2–3×20 мин)</li>
+          </ul>
+        `
+      },
+      {
+        title:'ЗОНА 4 — Порог (ПАНО)',
+        html:`
+          <p>95–101% ПАНО</p>
+          <p>Суть: интенсивно и некомфортно, но удержимо.</p>
+          <p>Для чего: повышение порога, умение дольше терпеть высокую нагрузку.</p>
+          <p>Примеры тренировок:</p>
+          <ul>
+            <li>интервалы по 10–20 мин (с коротким отдыхом)</li>
+            <li>короткие интервалы (например, 3×15 мин)</li>
+            <li>«часовой тест» — средний пульс ≈ ПАНО</li>
+          </ul>
+        `
+      },
+      {
+        title:'ЗОНА 5 — VO₂max (анаэробная выносливость)',
+        html:`
+          <p>102–106% ПАНО</p>
+          <p>Суть: выше порога, работа на VO₂max (максимальное потребление кислорода).</p>
+          <p>Для чего: повышение максимальной аэробной мощности.</p>
+          <p>Примеры тренировок:</p>
+          <ul>
+            <li>интервалы по 3–5 мин</li>
+            <li>5×1000 м или 6×800 м с равным отдыхом</li>
+            <li>фартлек в быстром темпе</li>
+          </ul>
+        `
+      },
+      {
+        title:'ЗОНА 6 — Анаэробная мощность',
+        html:`
+          <p>&gt;106% ПАНО</p>
+          <p>Суть: почти максимум, короткие усилия.</p>
+          <p>Для чего: развитие нервно-мышечной системы, скорость.</p>
+          <p>Примеры тренировок:</p>
+          <ul>
+            <li>интервалы по 30–90 сек</li>
+            <li>спринты в горку</li>
+            <li>ускорения 200–400 м</li>
+          </ul>
+          <p><strong>Почему 6 зон, а не 5:</strong><br>
+          Стандартная «зона 5» разделена на две части — выносливость (зона 5) и мощность (зона 6), чтобы точнее разделять интервальные работы.</p>
+        `
+      },
+    ];
+    return infos[i];
+  }
+
+  function getANP(){
+    let v = parseInt($('#anp').value,10);
+    if (Number.isNaN(v)) v = lastValidANP;
+    v = Math.max(60, Math.min(220, v));
+    lastValidANP = v;
+    return v;
+  }
+
+  function render(){
+    const v = getANP();
+    const list = calcZones(v);
+    const grid = $('#zonesGrid');
+    const frag = document.createDocumentFragment();
+    list.forEach((z,i)=>{
+      let hearts = '';
+      for(let h=1; h<=6; h++){                 // до 6 сердечек
+        const active = h<=i+1;
+        const char = active ? '❤' : '♡';
+        hearts += `<span class="${active ? 'active' : ''}">${char}</span>`;
+      }
+      const el = document.createElement('div');
+      el.className = 'tile';
+      el.tabIndex = 0; // доступна по Tab
+
+      const info = zoneInfo(i);
+      el.dataset.index = i;
+      el.dataset.title = info.title;
+      el.dataset.html = info.html;
+      el.innerHTML = `
+        <div class="zone-row">
+          <div class="zone-title">${z.name}</div>
+          <div class="hearts" aria-hidden="true">${hearts}</div>
+        </div>
+        <div class="zone-desc">${z.desc}</div>
+        <div class="num">${z.val}</div>
+      `;
+      el.addEventListener('click', ()=> openInfo(i));
+      el.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' ') openInfo(i); });
+      frag.appendChild(el);
+    });
+    grid.innerHTML = '';
+    grid.appendChild(frag);
+  }
+
+  function applyPulse(idx){
+    const tiles = document.querySelectorAll('.tile');
+    tiles.forEach(t=>t.classList.remove('pulse'));
+    if(tiles[idx]) tiles[idx].classList.add('pulse');
+  }
+
+  // модалка с корректным переходом пульсации на след. карточку + доступность
+  function openModal(title, html, advanceIndex){
+    lastFocused = document.activeElement;
+
+    $('#modalTitle').textContent = title;
+
+    // Безопасное наполнение: HTML контролируем мы — через временный контейнер
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = html;
+    const frag = document.createDocumentFragment();
+    while (wrapper.firstChild) frag.appendChild(wrapper.firstChild);
+    const mc = $('#modalContent');
+    mc.innerHTML = '';
+    mc.appendChild(frag);
+
+    $('#modal').classList.add('show');
+
+    // focus trap
+    const focusables = $('#modal').querySelectorAll('button, [href], input, [tabindex]:not([tabindex="-1"])');
+    const first = focusables[0] || $('#modalClose');
+    const last = focusables[focusables.length - 1] || $('#modalClose');
+    (first).focus();
+
+    const onClose = ()=>{
+      $('#modal').classList.remove('show');
+      if (typeof advanceIndex === 'number') {
+        const tiles = document.querySelectorAll('.tile');
+        const maxIndex = tiles.length - 1;
+        if (advanceIndex < maxIndex) {
+          const next = Math.min(advanceIndex + 1, maxIndex);
+          applyPulse(next);
+        } else {
+          tiles.forEach(t=>t.classList.remove('pulse'));
+        }
+      }
+      detach();
+      if (lastFocused && document.body.contains(lastFocused)) lastFocused.focus();
+    };
+    const onBackdrop = (e)=>{ if(e.target === $('#modal')) onClose(); };
+    const onKey = (e)=>{
+      if(e.key==='Escape') onClose();
+      if(e.key==='Tab' && focusables.length){
+        if (e.shiftKey && document.activeElement === first){ e.preventDefault(); (last).focus(); }
+        else if (!e.shiftKey && document.activeElement === last){ e.preventDefault(); (first).focus(); }
+      }
+    };
+
+    function detach(){
+      $('#modalClose').removeEventListener('click', onClose);
+      $('#modal').removeEventListener('click', onBackdrop);
+      document.removeEventListener('keydown', onKey);
+    }
+
+    $('#modalClose').addEventListener('click', onClose, {once:true});
+    $('#modal').addEventListener('click', onBackdrop, {once:true});
+    document.addEventListener('keydown', onKey);
+  }
+
+  function openInfo(index){
+    const info = zoneInfo(index);
+    openModal(info.title, info.html, index);
+  }
+
+  function bindPress(el){
+    if(!el) return;
+    const add = ()=> el.classList.add('pressed');
+    const rm  = ()=> el.classList.remove('pressed');
+    el.addEventListener('touchstart', add, {passive:true});
+    el.addEventListener('touchend',  rm);
+    el.addEventListener('mousedown', add);
+    el.addEventListener('mouseup',   rm);
+    el.addEventListener('mouseleave',rm);
+  }
+
+  bindPress($('#doCalc'));
+  bindPress($('#helpTile'));
+
+  $('#doCalc').addEventListener('click', ()=>{
+    render();
+    pulseIndex = 0;
+    applyPulse(pulseIndex);
+  });
+
+  // === Поле АНП: чистим при фокусе, возвращаем при blur, Enter — пересчёт ===
+  const anpInput = $('#anp');
+
+  anpInput.addEventListener('focus', e => {
+    e.target.value = '';
+  });
+
+  // Enter — пересчёт
+  anpInput.addEventListener('keydown', e=>{
+    if(e.key==='Enter'){
+      render();
+      pulseIndex = 0;
+      applyPulse(pulseIndex);
+    }
+  });
+
+  // Если ушли из поля и оставили пусто — вернуть последнее валидное значение
+  anpInput.addEventListener('blur', e=>{
+    if(!e.target.value){
+      e.target.value = lastValidANP;
+    }
+  });
+
+  $('#helpTile').addEventListener('click', ()=>{
+    openModal(
+      'Как узнать свой анаэробный порог',
+      `
+      <p>Беги один час в максимально устойчивом темпе, который можешь выдержать на всём протяжении дистанции. Цель — пройти за 60 минут максимально возможное расстояние. Если не получается всё время бежать, можно чередовать бег и шаг, но старайся поддерживать равномерную нагрузку.</p>
+      <p>Часовой бег — простой полевой тест для оценки анаэробного порога. Средний пульс за этот интервал обычно соответствует индивидуальному порогу.</p>
+      `
+    );
+  });
+
+  // Первый рендер
+  render();
+</script>
+</body>
+</html>
